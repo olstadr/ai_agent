@@ -152,29 +152,11 @@ def main():
 			)
 
 			# Add model's candidates to conversation (if not broken)
-			candidate = response.candidates[0]
-			model_parts = []
-			if isinstance(candidate.content, list):
-				for part in candidate.content:
-					if isinstance(part, str):
-						model_parts.append(types.Part(text=part))
-					else:
-						model_parts.append(part)
-			elif isinstance(candidate.content, str):
-				model_parts = [types.Part(text=candidate.content)]
-			else:
-				model_parts = [candidate.content]
-			if (candidate.content is not None) and (
-				(isinstance(candidate.content, str) and candidate.content.strip())
-				or (isinstance(candidate.content, list) and any(
-					(isinstance(part, str) and part.strip()) or hasattr(part, 'function_call')
-					for part in candidate.content))
-				):
-				conversation.append(types.Content(role="model", parts=model_parts))
+			for candidate in response.candidates:
+				conversation.append(candidate.content)
 
 				# Handle function calls and add tool output to conversation (if not broken) (under model calls to avoid model invocation issues)
 			if response.function_calls:
-				tool_parts = []
 				for called_function in response.function_calls:
 					print(f" - Calling function: {called_function.name}")
 					function_call_result = call_function(called_function)
@@ -182,27 +164,10 @@ def main():
 						raise Exception("Function call result missing expected response structure") 
 					if function_call_result.parts[0].function_response.response and verbose:
 						print(f"-> {function_call_result.parts[0].function_response.response}")
-					tool_parts.append(function_call_result.parts[0])
-				conversation.append(types.Content(role="tool", parts=tool_parts))
+					conversation.append(types.Content(role="tool", parts=function_call_result.parts))
 
-			final_text = None
 			if response.text:
-				final_text = response.text
-
-			else:
-				for candidate in response.candidates:
-					if isinstance(candidate.content, str) and candidate.content.strip():
-						final_text = candidate.content
-						break
-
-					elif isinstance(candidate.content, list):
-						for part in candidate.content:
-							if isinstance(part, str) and part.strip():
-								final_text = part
-								break
-
-			if final_text:
-				print(f"Final response:\n{final_text}")
+				print(f"Final response:\n{response.text}")
 				break
 
 		else:
