@@ -68,6 +68,9 @@ def main():
 	- Write or overwrite files with write_file
 	- Use available_functions to investigate or explore the system when needing more context to answer a question
 
+	When asked to fix bugs, you should identify the issue, make the necessary code changes using write_file, and then verify the fix works.
+	All source code lives in the pkg/ directory. When referring to the calculator code, use pkg/calculator.py.
+
 	After gathering all relavent information in the system, provide a function call plan.
 
 	Should any action be performed that results in writing a file or any code change, verify the results by executing the relavent code or re-reading specific file content if the change was purely textual.
@@ -151,24 +154,26 @@ def main():
 				config=config
 			)
 
-			# Add model's candidates to conversation (if not broken)
-			for candidate in response.candidates:
-				conversation.append(candidate.content)
+			candidate = response.candidates[0]
 
-				# Handle function calls and add tool output to conversation (if not broken) (under model calls to avoid model invocation issues)
+			# Handle function calls and add model & tool outputs together conversation (if not broken) (model calls first to avoid model invocation issues [user>model>tool])
 			if response.function_calls:
+				tool_parts = []
 				for called_function in response.function_calls:
-					print(f" - Calling function: {called_function.name}")
 					function_call_result = call_function(called_function)
 					if not function_call_result.parts[0].function_response.response:
 						raise Exception("Function call result missing expected response structure") 
 					if function_call_result.parts[0].function_response.response and verbose:
 						print(f"-> {function_call_result.parts[0].function_response.response}")
-					conversation.append(types.Content(role="tool", parts=function_call_result.parts))
+					tool_parts.append(function_call_result.parts[0])
+				conversation.append(candidate.content)
+				conversation.append(types.Content(role="tool", parts=tool_parts))
 
-			if response.text:
-				print(f"Final response:\n{response.text}")
-				break
+			else:
+				conversation.append(candidate.content)
+				if response.text:
+					print(f"Final response:\n{response.text}")
+					break
 
 		else:
 			print("Agent stopped after 20 iterations to prevent an infinite loop.")
